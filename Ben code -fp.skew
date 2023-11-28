@@ -1,0 +1,115 @@
+---
+title: "Cichlid Project"
+author: "Ben Ibbott"
+date: "2023-11-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+
+```
+
+
+```{r}
+Cichlid_data <- read_csv("C:/Users/benib/OneDrive/Bioscience DTP/Modules/Stats and Data Management - intermediate/Cichlid project/vertebral_counts_all_tribes.csv")
+```
+
+
+Data wrangling. group the data by species_name, calculate the variance and mean for total count and precaudal/caudal counts.
+The data has also been filtered to remove any species where there is less than 5 datapoints collected
+```{r}
+cichlid_summarised <- Cichlid_data %>%
+  group_by(species_name) %>%
+  summarize(
+    variance = var(total_count, na.rm = TRUE),
+    average_total_count = mean(total_count, na.rm = TRUE),
+    average_precaudal_count = mean(precaudal_count, na.rm = TRUE),
+    average_caudal_count = mean(caudal_count, na.rm = TRUE),
+    freq_count = sum(!is.na(species_name))
+  ) %>%
+  filter(freq_count >= 3) %>%
+  left_join(Cichlid_data, by = "species_name") %>%
+  select(-freq_count)
+
+cichlid_grouped <- cichlid_summarised %>%
+  group_by(species_name) %>%
+  slice(1)
+col_remove <- c("total_count", "precaudal_count", "caudal_count", "Reference")
+cichlid_grouped <- select(cichlid_grouped, -one_of(col_remove))
+
+```
+
+
+plotting graph for variance against average total vertebrae length
+```{r}
+ggplot(cichlid_grouped, aes(x = average_total_count, y = variance)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = FALSE, color = "red", linetype = "dashed") +
+  labs(title = "Variance in # of vertebrae against total vertebrae count",
+       x = "Average Total Count",
+       y = "Variance") +
+  theme_minimal()
+
+
+```
+
+
+linear model for variance against average total count
+```{r}
+lm_cichlid <- lm(variance ~ average_total_count, data = cichlid_grouped)
+summary(lm_cichlid)
+```
+
+
+Fisher-Pearson moment of skewness function
+```{r}
+FP_skewness <- function(x) {
+  n <- length(x)
+  mean_x <- mean(x)
+  sd_x <- sd(x)
+  m3 <- sum((x - mean_x)^3) / n  # Third moment about the mean
+  m2 <- sum((x - mean_x)^2) / n  # Second moment about the mean (variance)
+  skewness <- m3 / (m2^(3/2))
+  return(skewness)
+}
+
+```
+
+
+summarising data frame to only contain species name and total count
+```{r}
+Skew_df <- cichlid_summarised[c("species_name","total_count")]
+```
+
+
+running skew function on that data frame
+```{r}
+result <- Skew_df %>%
+  group_by(species_name) %>%
+  summarise(fp_skewness = FP_skewness(total_count))
+```
+
+
+plotting fisher-pearson skewness against the average total count of vertebrae.
+```{r}
+skew_cichlid <- left_join(cichlid_grouped, result, by = "species_name")
+ggplot(skew_cichlid, aes(x = average_total_count, y = fp_skewness)) +
+  geom_point() +
+  labs(title = "fisher-pearson skewness against mean total vertebrae count",
+       x = "Mean Total Count",
+       y = "Fp_skewness")
+#shows no relationship between skewness and amount of vertebrae 
+```
+
+
+
+
+
+
